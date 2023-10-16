@@ -2,7 +2,7 @@ import streamlit as st
 import openai
 
 # Set your OpenAI API key
-openai.api_key = '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'
+openai.api_key = ''
 
 # Add custom CSS to set the background to white
 st.markdown(
