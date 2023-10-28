@@ -1,69 +1,57 @@
-import streamlit as st
+import sqlite3
 import openai
+import streamlit as st
+import datetime
 
 # Set your OpenAI API key
 openai.api_key = ''
 
-# Add custom CSS to set the background to white
-st.markdown(
-    """
-    <style>
-    body {
-        background-color: white;
-    }
-    .title-container {
-        background-color: blue;
-        padding: 10px;
-        color:white;
-    }
-    .get-answer-button {
-        background-color: blue;
-        color: white;
-    }
-    .cancel-button {
-        background-color: purple;
-        color: white;
-    }
-    .response-box {
-        padding: 20px;
-        background-color: lightgray;
-        display: block;
-        max-height: 100px;
-        color: gray;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
+CREATE_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS tax_prompts_and_responses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_input TEXT NOT NULL,
+    chatbot_response TEXT NOT NULL,
+    created_at DATETIME NOT NULL
 )
+"""
 
-st.markdown('<div class="title-container" style="font-size:x-large;"><b>Deloitte Auditor Enterprise Chat UI</b></div>', unsafe_allow_html=True)
+def save_tax_prompt_and_response(user_input, chatbot_response):
+    conn = sqlite3.connect("tax_prompts_and_responses.db")
+    cursor = conn.cursor()
+    cursor.execute(CREATE_TABLE_SQL)
+    now = datetime.datetime.now()
+    cursor.execute("INSERT INTO tax_prompts_and_responses (user_input, chatbot_response, created_at) VALUES (?, ?, ?)",
+                   (user_input, chatbot_response, now))
+    conn.commit()
 
-# Input box for user's question with a placeholder
-user_input = st.text_input("Enter your Tax Prompt here:", key="user_input", value="", placeholder="Tax Prompt", help="Tax prompt")
-
-# Create a row with two columns for buttons
-col1, col2 = st.columns(2)
-
-# Flag to track if the "Get Answer" button is clicked
-button_clicked = col1.button("Send", key="get-answer-button")
-
-# "Cancel" button to clear input
-cancel_button = col2.button("Cancel", key="cancel-button")
-
-# Text area for response
-# response_text = st.markdown('<div class="response-box"></div>', unsafe_allow_html=True)
-response_text = st.markdown('<div class="response-box">Response</div>', unsafe_allow_html=True)
-
-if button_clicked and user_input:
-    # Use OpenAI to generate a response
+def generate_chatbot_response(user_input):
     response = openai.Completion.create(
         engine="text-davinci-002",
         prompt="I have a tax question: " + user_input,
         max_tokens=150  # Adjust token limit as needed
     )
+    return response.choices[0].text.strip()
 
-    # Extract the response text
-    chatbot_response = response.choices[0].text
+def main():
+    st.markdown('<div class="title-container" style="font-size:x-large;"><b>Deloitte Auditor Enterprise Chat UI</b></div>', unsafe_allow_html=True)
+    user_input = st.text_input("Enter your Tax Prompt here:", key="user_input", value="", placeholder="Tax Prompt", help="Tax prompt")
+    col1, col2 = st.columns(2)
+    button_clicked = col1.button("Send", key="get-answer-button")
+    save_button = col2.button("Save to SQL", key="save-button")
+    response_text = st.empty()
+    saved_message = st.empty()
 
-    # Display the response
-    response_text = st.markdown('<div class="response-box">' + chatbot_response + '</div>', unsafe_allow_html=True)
+    if button_clicked and user_input:
+        chatbot_response = generate_chatbot_response(user_input)
+        response_text.markdown('<div class="response-box">' + chatbot_response + '</div>', unsafe_allow_html=True)
+
+    if save_button and user_input:
+        if button_clicked:  # If the "Send" button was clicked, use the generated response
+            save_tax_prompt_and_response(user_input, chatbot_response)
+        else:  # Otherwise, generate a new response for the current user input
+            chatbot_response = generate_chatbot_response(user_input)
+            save_tax_prompt_and_response(user_input, chatbot_response)
+        saved_message.markdown('<div class="saved-message">Prompt and response saved to SQL!</div>', unsafe_allow_html=True)
+
+if __name__ == "__main__":
+    main()
